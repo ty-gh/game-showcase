@@ -317,13 +317,8 @@ ITEMS.forEach((it, i) => {
 
 /* 1段あたりの「席」の数。全段で同じにして、リングの大きさと回転の刻みを揃えます。
    段のカードが席より少なければ同じカードを繰り返して埋めます（CONFIG.minSlots 参照）。
-   各段の枚数の公倍数が取れれば、どのカードも同じ回数ずつ並びます。 */
-const gcd = (a, b) => b ? gcd(b, a % b) : a;
-const lcm = (a, b) => a * b / gcd(a, b);
-const counts = tiers.map(t => t.items.length).filter(n => n > 0);
-let SLOTS = Math.max(CONFIG.minSlots, ...counts);
-const common = counts.reduce((a, b) => lcm(a, b), 1);
-if (common >= SLOTS && common <= 12) SLOTS = common;
+   席数が枚数で割り切れない段は、先頭のカードが1回多く並びます。 */
+const SLOTS = Math.max(1, CONFIG.minSlots, ...tiers.map(t => t.items.length));
 const step = 360 / SLOTS;
 
 /* リングの半径を席数から決めます。カードは正多角形の各辺に置かれるので、

@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" width="1920" height="1080">
+  <!-- 「ワークショップ受付中」カードのサムネ。index.html と同じ配色（白地＋ #4FADBB）。
+       文言を変えるときは下の <text> の中身を書き換えてください。 -->
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#4FADBB" stop-opacity=".18"/>
+      <stop offset="1" stop-color="#4FADBB" stop-opacity=".04"/>
+    </linearGradient>
+  </defs>
+  <rect width="1920" height="1080" fill="#ffffff"/>
+  <!-- 右上に差し色のにじみ、左下に細い斜めライン -->
+  <circle cx="1560" cy="220" r="520" fill="url(#g)"/>
+  <circle cx="1560" cy="220" r="360" fill="none" stroke="#4FADBB" stroke-opacity=".28" stroke-width="3"/>
+  <path d="M-40 1000 L560 400" stroke="#4FADBB" stroke-opacity=".35" stroke-width="3"/>
+  <path d="M-40 1080 L640 400" stroke="#4FADBB" stroke-opacity=".18" stroke-width="3"/>
+  <!-- 左上の小さな英字ラベル -->
+  <rect x="120" y="120" width="12" height="48" fill="#4FADBB"/>
+  <text x="156" y="160" font-family="-apple-system,BlinkMacSystemFont,'Hiragino Sans','Noto Sans JP','Yu Gothic',sans-serif"
+        font-size="40" font-weight="700" letter-spacing="10" fill="#4FADBB">WORKSHOP</text>
+  <!-- 本文 -->
+  <text x="120" y="560" font-family="-apple-system,BlinkMacSystemFont,'Hiragino Sans','Noto Sans JP','Yu Gothic',sans-serif"
+        font-size="200" font-weight="800" letter-spacing="6" fill="#16191a">ワークショップ</text>
+  <rect x="120" y="660" width="700" height="230" rx="115" fill="#4FADBB"/>
+  <text x="470" y="818" text-anchor="middle" font-family="-apple-system,BlinkMacSystemFont,'Hiragino Sans','Noto Sans JP','Yu Gothic',sans-serif"
+        font-size="150" font-weight="800" letter-spacing="8" fill="#ffffff">受付中</text>
+</svg>

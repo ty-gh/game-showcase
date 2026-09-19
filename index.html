@@ -55,16 +55,20 @@ body{
   background:radial-gradient(120% 78% at 50% 44%, transparent 38%, rgba(22,25,26,.11) 100%);
 }
 
-/* --- 3D リング ---------------------------------------------------------- */
+/* --- 3D リング（上・中・下の3段。段はスクリプトが ROWS の数だけ作ります） --- */
 #stage{
-  position:relative;z-index:2;flex:1 1 auto;
-  display:flex;align-items:center;justify-content:center;
-  perspective:var(--perspective);
+  position:relative;z-index:2;flex:1 1 auto;min-height:0;
+  display:flex;flex-direction:column;
+  padding:clamp(6px,1.4vh,24px) 0 clamp(16px,3vh,56px);
   touch-action:none;cursor:grab;
 }
 #stage.grabbing{cursor:grabbing}
-#tilt{position:relative;width:0;height:0;transform-style:preserve-3d;transform:rotateX(var(--tilt))}
-#ring{position:relative;width:0;height:0;transform-style:preserve-3d;will-change:transform}
+/* 1段 = リング + その段の正面カードのタイトル + ドット */
+.band{flex:1 1 0;min-height:0;display:flex;flex-direction:column;align-items:center}
+.band.empty{display:none}
+.scene{flex:1 1 auto;min-height:0;width:100%;display:flex;align-items:center;justify-content:center;perspective:var(--perspective)}
+.tilt{position:relative;width:0;height:0;transform-style:preserve-3d;transform:rotateX(var(--tilt))}
+.ring{position:relative;width:0;height:0;transform-style:preserve-3d;will-change:transform}
 
 .card{
   position:absolute;width:var(--card-w);aspect-ratio:16/9;
@@ -112,14 +116,13 @@ body{
   transform:translate(-50%,-50%) scale(0);animation:rip 620ms ease-out forwards;pointer-events:none}
 @keyframes rip{to{transform:translate(-50%,-50%) scale(1);opacity:0}}
 
-/* --- 下部のタイトルとドット ------------------------------------------- */
-footer{position:relative;z-index:3;flex:0 0 auto;padding:clamp(8px,1.6vh,22px) 24px clamp(20px,4vh,60px);text-align:center}
-#now{margin-bottom:clamp(14px,2.4vh,32px);transition:opacity .28s ease}
-#now b{display:block;font-size:clamp(17px,3vh,42px);font-weight:800;letter-spacing:.05em;white-space:pre-line}
-#now span{display:block;margin-top:.5em;font-size:clamp(11px,1.6vh,20px);letter-spacing:.14em;color:var(--accent)}
-#dots{display:flex;gap:10px;justify-content:center}
-#dots i{width:8px;height:8px;border-radius:50%;background:rgba(22,25,26,.16);transition:all .35s ease}
-#dots i.on{background:var(--accent);width:26px;border-radius:99px;box-shadow:0 2px 10px var(--a42)}
+/* --- 各段の下のタイトルとドット ------------------------------------------ */
+.now{flex:0 0 auto;padding:0 24px;text-align:center;transition:opacity .28s ease}
+.now b{display:block;font-size:clamp(14px,2.2vh,30px);font-weight:800;letter-spacing:.05em;white-space:pre-line;line-height:1.3}
+.now span{display:block;margin-top:.3em;font-size:clamp(10px,1.3vh,16px);letter-spacing:.14em;color:var(--accent)}
+.dots{flex:0 0 auto;display:flex;gap:8px;justify-content:center;margin-top:clamp(6px,1vh,14px)}
+.dots i{width:6px;height:6px;border-radius:50%;background:rgba(22,25,26,.16);transition:all .35s ease}
+.dots i.on{background:var(--accent);width:20px;border-radius:99px;box-shadow:0 2px 10px var(--a42)}
 
 /* --- 全画面モーダル ----------------------------------------------------- */
 #modal{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;padding:clamp(16px,4vh,64px)}
@@ -188,12 +191,8 @@ body.lite2 .glow{box-shadow:none}
 <div id="ambient"></div>
 <div id="vignette"></div>
 
-<div id="stage"><div id="tilt"><div id="ring"></div></div></div>
-
-<footer>
-  <div id="now"><b id="nowTitle"></b><span id="nowSub"></span></div>
-  <div id="dots"></div>
-</footer>
+<!-- 段（.band）はスクリプトが ROWS の数だけここに作ります -->
+<div id="stage"></div>
 
 <div id="modal" aria-hidden="true">
   <div id="backdrop"></div>
@@ -226,8 +225,13 @@ body.lite2 .glow{box-shadow:none}
        例）"理工カレッジ\nTGSドキュメントムービー"
        入れなければ幅に応じて自動で折り返します（日本語はどの文字の間でも
        折り返されるので、意味の切れ目で改行したいときに使ってください）。
-   ・6枚目以降を足したいときは、下の { ... } を1つコピーして
+   ・カードを足したいときは、下の { ... } を1つコピーして
      id を game6 などに変えるだけです。枚数の制限はありません。
+   ・リングは上・中・下の3段です（段数は ROWS）。カードは上から順に
+     1段目→2段目→3段目→1段目… と自動で振り分けます。
+     特定の段に置きたいときは row: 1 / 2 / 3 を1行足してください。
+   ・type は "game" / "video" のほか、お知らせ用に "info" が使えます
+     （タップすると画像と説明文だけが出ます。ラベルは tag: "〜" で変更可）。
    ========================================================================== */
 // 画面全体で使うアクセントカラー。基調は白黒で、差し色はこの1色だけです。
 // ここを変えると、枠の光・バッジ・ドット・下線・背景のにじみが一括で変わります。
@@ -243,7 +247,7 @@ const ITEMS = [
   {
     id: "game2", type: "game",
     title: "ポーズスタッキング",
-    desc:  "高く積み上げよう！\n。"
+    desc:  "高く積み上げよう！"
   },
   {
     id: "game3", type: "game",
@@ -264,9 +268,17 @@ const ITEMS = [
     id: "video1", type: "video",
     title: "理工カレッジ\nTGSドキュメントムービー",
     desc:  "インスタ、Youtubeをチェック！"
+  },
+  {
+    id: "workshop", type: "info",   // ← images/workshop.svg を読みます
+    title: "ワークショップ\n受付中",
+    desc:  "ワークショップの参加を受け付けています。\n詳しくはスタッフまでお声がけください。"
   }
   // 特定のカードだけ色を変えたいときは accent: "#xxxxxx" を1行足してください
 ];
+
+// リングの段数。ITEMS は上から順にこの段数へ振り分けられます（row: で指定も可）
+const ROWS = 3;
 
 /* --- 動きの調整（好みで数値を変えてください） --------------------------- */
 const CONFIG = {
@@ -279,6 +291,10 @@ const CONFIG = {
                        // 0 にすると一定速度でくるくる回り続けます（0〜0.9）
   snapToFront: false,  // true にすると、手を離したとき最寄りのカードで止まります
   idleResume:  2600,   // 操作後、自動回転に戻るまでの時間(ms)
+  minSlots:    6,      // 1段あたりの最低カード枚数。段のカードがこれより少ないときは
+                       // 同じカードを繰り返し並べてリングを埋めます（2枚だけだと
+                       // 裏側が常に見えず、1枚が回っているだけに見えるため）。
+                       // 1 にすると繰り返しなし
   autoLite:    true    // 動きが重い端末で、自動的に効果を減らして滑らかさを優先します
 };
 
@@ -287,16 +303,35 @@ const IMG_EXT = ["jpg","jpeg","png","webp","svg"];
 const VID_EXT = ["mp4","webm","m4v"];
 
 const $ = s => document.querySelector(s);
-const ring = $("#ring"), stage = $("#stage"), dots = $("#dots");
-const step = 360 / ITEMS.length;
-const cards = [];
+const stage = $("#stage");
+const cards = [];   // 全段のカード（描画・タップ判定用）
 
-/* リングの半径を枚数から決めます。カードは正多角形の各辺に置かれるので、
-   半径が「辺の長さの半分 ÷ tan(π/枚数)」を下回ると隣のカードと3Dで交差して
+/* --- ITEMS を段に振り分けます ------------------------------------------- */
+// tiers[r] = { items: その段の ITEMS（重複なし）, cards, angle, vel, front, ... }
+const tiers = [];
+for (let r = 0; r < ROWS; r++) tiers.push({ items: [], cards: [], angle: 0, vel: 0, front: -1, idleUntil: 0 });
+ITEMS.forEach((it, i) => {
+  const r = Math.min(ROWS, Math.max(1, Math.round(it.row || (i % ROWS) + 1))) - 1;
+  tiers[r].items.push({ it, itemIndex: i });
+});
+
+/* 1段あたりの「席」の数。全段で同じにして、リングの大きさと回転の刻みを揃えます。
+   段のカードが席より少なければ同じカードを繰り返して埋めます（CONFIG.minSlots 参照）。
+   各段の枚数の公倍数が取れれば、どのカードも同じ回数ずつ並びます。 */
+const gcd = (a, b) => b ? gcd(b, a % b) : a;
+const lcm = (a, b) => a * b / gcd(a, b);
+const counts = tiers.map(t => t.items.length).filter(n => n > 0);
+let SLOTS = Math.max(CONFIG.minSlots, ...counts);
+const common = counts.reduce((a, b) => lcm(a, b), 1);
+if (common >= SLOTS && common <= 12) SLOTS = common;
+const step = 360 / SLOTS;
+
+/* リングの半径を席数から決めます。カードは正多角形の各辺に置かれるので、
+   半径が「辺の長さの半分 ÷ tan(π/席数)」を下回ると隣のカードと3Dで交差して
    互いに切り合って見えます。その最小値に余裕を掛けたものを半径にします。 */
 const RING_MARGIN = 1.15;
-// 枚数が少ないと最小値が小さくなりすぎる（2枚で0）ので下限を設けています
-const ringK = Math.max(0.6, 0.5 / Math.tan(Math.PI / Math.max(2, ITEMS.length))) * RING_MARGIN;
+// 席数が少ないと最小値が小さくなりすぎる（2枚で0）ので下限を設けています
+const ringK = Math.max(0.6, 0.5 / Math.tan(Math.PI / Math.max(2, SLOTS))) * RING_MARGIN;
 document.documentElement.style.setProperty("--ring-k", ringK.toFixed(3));
 let effBlur = CONFIG.maxBlur;
 
@@ -333,35 +368,60 @@ function loadImage(el, id, label){
   tryNext();
 }
 
-ITEMS.forEach((it, i) => {
-  const card = document.createElement("div");
-  card.className = "card";
-  card.style.setProperty("--deg", (i * step) + "deg");
-  card.innerHTML =
-    '<div class="bob" style="--dur:' + (5.2 + (i % 3) * 1.1) + 's;--delay:' + (i * 0.47) + 's">' +
-      '<div class="inner" style="--c:' + accentOf(it) +
-        ';--c55:' + rgba(accentOf(it), .72) + ';--c28:' + rgba(accentOf(it), .34) + '">' +
-        '<img alt="">' +
-        '<div class="caption"><b></b></div>' +
-        '<div class="glow"></div>' +
-      '</div>' +
-    '</div>';
-  ring.appendChild(card);
-  card.querySelector(".caption b").textContent = it.title;
-  const inner = card.querySelector(".inner");
-  loadImage(inner, it.id, it.title);
-  cards.push({ el: card, inner, glow: card.querySelector(".glow"),
-               cap: card.querySelector(".caption"), item: it, index: i,
-               sc: -1, op: -1, bl: -1, gl: -1, cp: -1, z: -1, hit: null });
-  dots.appendChild(document.createElement("i"));
+/* --- 段ごとに DOM を組み立て、席にカードを並べます ---------------------- */
+let cardSeq = 0;   // ゆらゆらの位相をカードごとにずらすための通し番号
+tiers.forEach((tier, r) => {
+  const band = document.createElement("section");
+  band.className = "band" + (tier.items.length ? "" : " empty");
+  band.innerHTML =
+    '<div class="scene"><div class="tilt"><div class="ring"></div></div></div>' +
+    '<div class="now"><b></b><span></span></div>' +
+    '<div class="dots"></div>';
+  stage.appendChild(band);
+  tier.el = band; tier.ring = band.querySelector(".ring");
+  tier.nowBox = band.querySelector(".now");
+  tier.nowTitle = tier.nowBox.querySelector("b"); tier.nowSub = tier.nowBox.querySelector("span");
+  const dots = band.querySelector(".dots");
+  tier.items.forEach(() => dots.appendChild(document.createElement("i")));
+  tier.dotEls = [...dots.children];
+  if (!tier.items.length) return;
+
+  for (let s = 0; s < SLOTS; s++){
+    const { it, itemIndex } = tier.items[s % tier.items.length];
+    const i = cardSeq++;
+    const card = document.createElement("div");
+    card.className = "card";
+    card.style.setProperty("--deg", (s * step) + "deg");
+    card.innerHTML =
+      '<div class="bob" style="--dur:' + (5.2 + (i % 3) * 1.1) + 's;--delay:' + (i * 0.47) + 's">' +
+        '<div class="inner" style="--c:' + accentOf(it) +
+          ';--c55:' + rgba(accentOf(it), .72) + ';--c28:' + rgba(accentOf(it), .34) + '">' +
+          '<img alt="">' +
+          '<div class="caption"><b></b></div>' +
+          '<div class="glow"></div>' +
+        '</div>' +
+      '</div>';
+    tier.ring.appendChild(card);
+    card.querySelector(".caption b").textContent = it.title;
+    const inner = card.querySelector(".inner");
+    loadImage(inner, it.id, it.title);
+    const c = { el: card, inner, glow: card.querySelector(".glow"),
+                cap: card.querySelector(".caption"), item: it, itemIndex,
+                tier, slot: s, deg: s * step,
+                sc: -1, op: -1, bl: -1, gl: -1, cp: -1, z: -1, hit: null, vis: null };
+    cards.push(c); tier.cards.push(c);
+  }
+  // 段ごとに位相を少しずらして、3段が同時に切り替わらないようにします
+  tier.angle = -(r * step / ROWS);
+  tier.vel = -CONFIG.autoSpeed;
 });
-const dotEls = [...dots.children];
 
 /* --- 毎フレーム：奥行きに応じて 大きさ・明るさ・ぼかし を付ける -------- */
-// 自動回転は angle を減らす向きに回します。カードは rotateY(i×step) で
+// 自動回転は angle を減らす向きに回します。カードは rotateY(slot×step) で
 // 左→右に 1,2,3… と並ぶので、angle が減ると正面が 1→2→3 の順に進みます。
-let angle = 0, vel = -CONFIG.autoSpeed, front = -1, lastT = performance.now();
-let dragging = false, paused = false, idleUntil = 0;
+let lastT = performance.now();
+let dragging = false, paused = false;
+let activeTier = tiers[Math.floor(ROWS / 2)];   // 直近に触った段（矢印キー等の対象）
 
 const norm = a => { a = a % 360; if (a > 180) a -= 360; if (a < -180) a += 360; return a; };
 
@@ -372,14 +432,15 @@ const FLAT = Math.min(28, step * 0.55);
 // 画面が「カードの壁」のように雑然とするためです。
 const FADE = 112;
 
-function render(){
-  // まず一番正面に近いカードを決めてから、各カードの見え方を決めます
-  let best = 1e9, bestI = 0;
-  for (const c of cards){
-    c.d = Math.abs(norm(angle + c.index * step));
-    if (c.d < best){ best = c.d; bestI = c.index; }
+function renderTier(tier){
+  if (!tier.cards.length) return;
+  // まずその段で一番正面に近いカードを決めてから、各カードの見え方を決めます
+  let best = 1e9, bestC = null;
+  for (const c of tier.cards){
+    c.d = Math.abs(norm(tier.angle + c.deg));
+    if (c.d < best){ best = c.d; bestC = c; }
   }
-  for (const c of cards){
+  for (const c of tier.cards){
     const d = c.d;
     const q = Math.max(0, Math.min(1, (d - FLAT) / (FADE - FLAT)));  // 0=正面域, 1=消える境目
     // 大きさは正面で原寸(1.0)、離れるほど連続的に小さく。正面より大きくはしません。
@@ -389,78 +450,85 @@ function render(){
     // 正面付近は完全に不透明。白地では半透明だと下のカードが透けて濁ります。
     const op = Math.round(Math.max(0, 1 - Math.pow(q, 1.15)) * 100) / 100;
     const bl = Math.round(Math.pow(q, 0.9) * effBlur * 2) / 2;
-    // 光るリングは必ず1枚だけ。どれが選択中か迷わせないため。
-    const gl = (c.index === bestI) ? 1 : 0;
+    // 光るリングは段ごとに必ず1枚だけ。どれが選択中か迷わせないため。
+    const gl = (c === bestC) ? 1 : 0;
     const z  = Math.round((1 - d / 180) * 100);
     if (sc !== c.sc){ c.inner.style.transform = "scale(" + sc + ")"; c.sc = sc; }
     if (op !== c.op){ c.inner.style.opacity = op; c.op = op; }
     if (bl !== c.bl){ c.inner.style.filter = bl > 0.4 ? "blur(" + bl + "px)" : "none"; c.bl = bl; }
     if (gl !== c.gl){ c.glow.style.opacity = gl; c.cap.style.opacity = 1 - gl; c.gl = gl; }
     if (z  !== c.z ){ c.el.style.zIndex = z; c.z = z; }
-    // 消えているカードがタップを横取りしないようにします
+    // 消えているカードがタップを横取りしないようにします。
+    // 3段ぶんのカードがあるので、見えないカードは描画対象からも外します。
     const hit = op > 0.08;
     if (hit !== c.hit){ c.el.style.pointerEvents = hit ? "auto" : "none"; c.hit = hit; }
+    const vis = op > 0;
+    if (vis !== c.vis){ c.el.style.visibility = vis ? "visible" : "hidden"; c.vis = vis; }
   }
-  if (bestI !== front){
-    front = bestI;
-    setAccent(accentOf(ITEMS[front]));
-    dotEls.forEach((d, i) => d.classList.toggle("on", i === front));
-    showNow(ITEMS[front]);
+  if (bestC.itemIndex !== tier.front){
+    tier.front = bestC.itemIndex;
+    const it = bestC.item;
+    if (tier === activeTier) setAccent(accentOf(it));
+    tier.dotEls.forEach((d, i) => d.classList.toggle("on", tier.items[i].itemIndex === tier.front));
+    showNow(tier, it);
   }
-  ring.style.transform = "rotateY(" + angle + "deg)";
+  tier.ring.style.transform = "rotateY(" + tier.angle + "deg)";
 }
 
-/* 正面に来たカードの名前を、下の大きな文字に反映します */
-const nowBox = $("#now"), nowTitle = $("#nowTitle"), nowSub = $("#nowSub");
-let nowTimer = null;
-function showNow(it){
-  nowBox.style.opacity = 0;
-  clearTimeout(nowTimer);
-  nowTimer = setTimeout(() => {
-    nowTitle.textContent = it.title;
-    nowSub.textContent   = it.sub || "";
-    nowSub.style.display = it.sub ? "" : "none";
-    nowBox.style.opacity = 1;
+/* 正面に来たカードの名前を、その段の下の文字に反映します */
+function showNow(tier, it){
+  tier.nowBox.style.opacity = 0;
+  clearTimeout(tier.nowTimer);
+  tier.nowTimer = setTimeout(() => {
+    tier.nowTitle.textContent = it.title;
+    tier.nowSub.textContent   = it.sub || "";
+    tier.nowSub.style.display = it.sub ? "" : "none";
+    tier.nowBox.style.opacity = 1;
   }, 200);
 }
 
 /* 端末が非力なときは、自動で効果を減らして滑らかさを優先します */
-let fpsFrames = 0, fpsT0 = 0, tier = 0;
+let fpsFrames = 0, fpsT0 = 0, liteLevel = 0;
 function perfGuard(t){
-  if (!CONFIG.autoLite || tier >= 2) return;
+  if (!CONFIG.autoLite || liteLevel >= 2) return;
   if (!fpsT0){ fpsT0 = t; return; }
   fpsFrames++;
   if (t - fpsT0 < 2500) return;
   const fps = fpsFrames / ((t - fpsT0) / 1000);
   fpsFrames = 0; fpsT0 = t;
-  if (tier === 0 && fps < 26){
-    tier = 1; effBlur = 0;
+  if (liteLevel === 0 && fps < 26){
+    liteLevel = 1; effBlur = 0;
     cards.forEach(c => { c.bl = -1; });          // 次のフレームで filter:none を書き直させる
     document.body.classList.add("lite");
-  } else if (tier === 1 && fps < 22){
-    tier = 2; document.body.classList.add("lite2");
+  } else if (liteLevel === 1 && fps < 22){
+    liteLevel = 2; document.body.classList.add("lite2");
+  }
+}
+
+function stepTier(tier, t, dt){
+  if (CONFIG.snapToFront && t > tier.idleUntil){
+    const target = -Math.round(tier.angle / step) * step;
+    tier.angle += (target - tier.angle) * 0.14;
+    tier.vel = 0;
+  } else {
+    // カードが正面に来たところで少し「溜める」ので、
+    // 回り続けていても各カードがきちんと中央で見られます
+    const phase = (((tier.angle % step) + step) % step) / step;
+    const cam = 1 - CONFIG.detent * Math.cos(phase * 2 * Math.PI);
+    tier.angle += tier.vel * dt * cam;
+    // 勢いは「止まる」のではなく、ゆっくりした自動回転に戻っていきます
+    const base = (t > tier.idleUntil) ? -CONFIG.autoSpeed : 0;
+    tier.vel = base + (tier.vel - base) * Math.pow(CONFIG.friction, dt / 16.67);
   }
 }
 
 function tick(t){
   const dt = Math.min(48, t - lastT); lastT = t;
-  if (!dragging && !paused){
-    if (CONFIG.snapToFront && t > idleUntil){
-      const target = -Math.round(angle / step) * step;
-      angle += (target - angle) * 0.14;
-      vel = 0;
-    } else {
-      // カードが正面に来たところで少し「溜める」ので、
-      // 回り続けていても各カードがきちんと中央で見られます
-      const phase = (((angle % step) + step) % step) / step;
-      const cam = 1 - CONFIG.detent * Math.cos(phase * 2 * Math.PI);
-      angle += vel * dt * cam;
-      // 勢いは「止まる」のではなく、ゆっくりした自動回転に戻っていきます
-      const base = (t > idleUntil) ? -CONFIG.autoSpeed : 0;
-      vel = base + (vel - base) * Math.pow(CONFIG.friction, dt / 16.67);
-    }
+  for (const tier of tiers){
+    // 指で押さえている段は動かさない（他の段は回り続ける）
+    if (!paused && !(dragging && tier === activeTier)) stepTier(tier, t, dt);
+    renderTier(tier);
   }
-  render();
   perfGuard(t);
   requestAnimationFrame(tick);
 }
@@ -468,11 +536,26 @@ function tick(t){
 /* --- スワイプ（慣性つき） ---------------------------------------------- */
 let sx = 0, sy = 0, sAngle = 0, sTime = 0, moved = 0, lastX = 0, lastMoveT = 0, downCard = null;
 
+/* 指を置いた位置がどの段かを決めます（段の隙間なら一番近い段） */
+function tierAt(e){
+  const hit = e.target.closest && e.target.closest(".band");
+  if (hit){ const t = tiers.find(t => t.el === hit); if (t && t.cards.length) return t; }
+  let best = null, bd = 1e9;
+  for (const t of tiers){
+    if (!t.cards.length) continue;
+    const r = t.el.getBoundingClientRect();
+    const d = Math.abs(e.clientY - (r.top + r.height / 2));
+    if (d < bd){ bd = d; best = t; }
+  }
+  return best || activeTier;
+}
+
 stage.addEventListener("pointerdown", e => {
+  activeTier = tierAt(e);
   dragging = true; stage.classList.add("grabbing");
   try { stage.setPointerCapture(e.pointerId); } catch (_) {}
-  sx = lastX = e.clientX; sy = e.clientY; sAngle = angle;
-  sTime = lastMoveT = performance.now(); moved = 0; vel = 0;
+  sx = lastX = e.clientX; sy = e.clientY; sAngle = activeTier.angle;
+  sTime = lastMoveT = performance.now(); moved = 0; activeTier.vel = 0;
   downCard = e.target.closest(".card");
   const inner = e.target.closest(".inner");
   if (inner) ripple(inner, e);
@@ -482,22 +565,22 @@ stage.addEventListener("pointermove", e => {
   if (!dragging) return;
   const dx = e.clientX - sx;
   moved = Math.max(moved, Math.hypot(dx, e.clientY - sy));
-  angle = sAngle + dx * CONFIG.dragSense;
+  activeTier.angle = sAngle + dx * CONFIG.dragSense;
   const now = performance.now(), dt = now - lastMoveT;
-  if (dt > 4){ vel = ((e.clientX - lastX) * CONFIG.dragSense) / dt; lastX = e.clientX; lastMoveT = now; }
+  if (dt > 4){ activeTier.vel = ((e.clientX - lastX) * CONFIG.dragSense) / dt; lastX = e.clientX; lastMoveT = now; }
 });
 
 function endDrag(){
   if (!dragging) return;
   dragging = false; stage.classList.remove("grabbing");
   const dur = performance.now() - sTime;
-  idleUntil = performance.now() + CONFIG.idleResume;
+  activeTier.idleUntil = performance.now() + CONFIG.idleResume;
   // ほとんど動いていなければ「タップ」とみなす
   if (moved < 14 && dur < 700 && downCard){
     const c = cards.find(c => c.el === downCard);
     if (c) openModal(c);
   }
-  vel = Math.max(-2.2, Math.min(2.2, vel));   // 回しすぎ防止
+  activeTier.vel = Math.max(-2.2, Math.min(2.2, activeTier.vel));   // 回しすぎ防止
   downCard = null;
 }
 stage.addEventListener("pointerup", endDrag);
@@ -534,7 +617,7 @@ function openModal(c){
   animating = true; openCard = c; paused = true;
   const it = c.item;
   setAccent(accentOf(it));
-  $("#mtag").textContent   = it.type === "video" ? "MOVIE" : "GAME";
+  $("#mtag").textContent   = it.tag || (it.type === "video" ? "MOVIE" : it.type === "info" ? "INFO" : "GAME");
   $("#mtitle").textContent = it.title;
   $("#msub").textContent   = it.sub || "";
   $("#msub").style.display = it.sub ? "" : "none";
@@ -619,7 +702,7 @@ function closeModal(){
     hero.getAnimations().forEach(a => a.cancel());
     hero.innerHTML = "";
     paused = false; animating = false; openCard = null;
-    idleUntil = performance.now() + CONFIG.idleResume;
+    tiers.forEach(t => { t.idleUntil = performance.now() + CONFIG.idleResume; });
     lastT = performance.now();
   }, 900);
 
@@ -639,8 +722,10 @@ $("#close").addEventListener("click", closeModal);
 backdrop.addEventListener("click", closeModal);
 document.addEventListener("keydown", e => {
   if (e.key === "Escape") closeModal();
-  if (e.key === "ArrowLeft")  { angle += step; idleUntil = performance.now() + CONFIG.idleResume; }
-  if (e.key === "ArrowRight") { angle -= step; idleUntil = performance.now() + CONFIG.idleResume; }
+  // 矢印キーは全段をまとめて1枚ぶん送ります（上下キーで対象の段を選ぶ操作はありません）
+  const nudge = d => tiers.forEach(t => { t.angle += d; t.idleUntil = performance.now() + CONFIG.idleResume; });
+  if (e.key === "ArrowLeft")  nudge(step);
+  if (e.key === "ArrowRight") nudge(-step);
 });
 
 /* --- 全画面ボタン ------------------------------------------------------- */

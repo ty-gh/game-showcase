@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>Game Showcase</title>
+<style>
+/* ==========================================================================
+   見た目の調整はここ。数値を変えるだけで印象が変わります。
+   ========================================================================== */
+:root{
+  --card-w: clamp(230px, 42vw, 620px);   /* カードの幅。大きくすると迫力が出ます */
+  /* リングの半径 = カード幅 × --ring-k。--ring-k は起動時にスクリプトが
+     枚数から自動計算して上書きするので、ここの数値を変えても効きません。
+     密集させたい／ゆったりさせたいときはスクリプトの RING_MARGIN を変えてください */
+  --ring-k: 1.19;
+  --radius: calc(var(--card-w) * var(--ring-k));
+  --perspective: 2200px;                 /* 小さいほど奥行きが強調されます */
+  --tilt: -7deg;                         /* リングの傾き。0deg で真横から見た形になります */
+  --bob: 12px;                           /* ゆらゆらの振れ幅 */
+  /* 白地の配色。ここを変えると画面全体のトーンが変わります */
+  --bg:      #dce3e4;                 /* 画面の下地（カードの白を浮かせるため少しグレー） */
+  --surface: #ffffff;                 /* カード・モーダルの面 */
+  --ink:     #16191a;                 /* 見出しと本文 */
+  --ink-2:   #566063;                 /* 補足の文章 */
+  --ink-3:   #949fa1;                 /* さらに control な文字・ドット */
+  --line:    rgba(22,25,26,.12);      /* 細い罫線 */
+  /* 下の色はスクリプト側から自動で入ります（さわる必要はありません） */
+  --accent: #4FADBB;
+  --accent-lt: #9bcfd7;
+  --a42: rgba(79,173,187,.22);
+  --a22: rgba(79,173,187,.11);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden;background:var(--bg)}
+body{
+  font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Noto Sans JP","Yu Gothic",sans-serif;
+  color:var(--ink);user-select:none;-webkit-user-select:none;overscroll-behavior:none;
+  display:flex;flex-direction:column;
+}
+
+/* --- 背景：正面カードの色がにじむアンビエントグロー -------------------- */
+#ambient{
+  position:fixed;inset:-25%;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(48% 38% at 50% 42%, var(--a42) 0%, transparent 70%),
+    radial-gradient(70% 55% at 50% 105%, var(--a22) 0%, transparent 72%);
+  filter:blur(60px);opacity:.38;
+  transition:background 900ms ease;
+}
+#vignette{
+  position:fixed;inset:0;z-index:1;pointer-events:none;
+  background:radial-gradient(120% 78% at 50% 44%, transparent 38%, rgba(22,25,26,.11) 100%);
+}
+
+/* --- 3D リング ---------------------------------------------------------- */
+#stage{
+  position:relative;z-index:2;flex:1 1 auto;
+  display:flex;align-items:center;justify-content:center;
+  perspective:var(--perspective);
+  touch-action:none;cursor:grab;
+}
+#stage.grabbing{cursor:grabbing}
+#tilt{position:relative;width:0;height:0;transform-style:preserve-3d;transform:rotateX(var(--tilt))}
+#ring{position:relative;width:0;height:0;transform-style:preserve-3d;will-change:transform}
+
+.card{
+  position:absolute;width:var(--card-w);aspect-ratio:16/9;
+  left:calc(var(--card-w) / -2);top:calc(var(--card-w) * 9 / 16 / -2);
+  transform:rotateY(var(--deg)) translateZ(var(--radius));
+}
+.bob{width:100%;height:100%;animation:bob var(--dur) ease-in-out var(--delay) infinite}
+@keyframes bob{0%,100%{transform:translateY(calc(var(--bob) * -1))}50%{transform:translateY(var(--bob))}}
+.inner{
+  position:relative;width:100%;height:100%;border-radius:18px;overflow:hidden;
+  background:var(--surface);will-change:transform,filter,opacity;
+  box-shadow:0 26px 52px rgba(22,25,26,.26), 0 6px 16px rgba(22,25,26,.12),
+             0 0 0 1px rgba(22,25,26,.16) inset;
+}
+.inner img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
+
+/* 画像が1枚も読めなかった時のフォールバック表示 */
+.inner.noimg img{display:none}
+.inner.noimg::after{
+  content:attr(data-label);position:absolute;inset:0;
+  display:flex;align-items:center;justify-content:center;
+  font-size:clamp(13px,2.4vh,26px);letter-spacing:.2em;color:var(--ink-3);
+  background:repeating-linear-gradient(45deg,rgba(22,25,26,.035) 0 12px,transparent 12px 24px);
+  border:2px dashed rgba(22,25,26,.16);border-radius:18px;text-align:center;padding:10%;
+}
+
+/* 正面カードだけ光る枠 */
+.glow{
+  position:absolute;inset:0;border-radius:18px;pointer-events:none;opacity:0;
+  box-shadow:inset 0 0 0 3px var(--c), inset 0 0 26px var(--c28);
+  transition:opacity .35s ease;
+}
+
+.caption{
+  position:absolute;left:0;right:0;bottom:0;padding:16% 5% 5%;pointer-events:none;
+  background:linear-gradient(transparent,rgba(255,255,255,.95));color:var(--ink);
+  transition:opacity .35s ease;
+}
+/* 正面のカードは、下の大きな見出しと重複するのでキャプションを消します */
+.caption b{display:block;font-size:clamp(12px,2.1vh,27px);font-weight:700;letter-spacing:.04em}
+
+/* タップ波紋 */
+.ripple{position:absolute;border-radius:50%;background:radial-gradient(circle,rgba(22,25,26,.2),transparent 68%);
+  transform:translate(-50%,-50%) scale(0);animation:rip 620ms ease-out forwards;pointer-events:none}
+@keyframes rip{to{transform:translate(-50%,-50%) scale(1);opacity:0}}
+
+/* --- 下部のタイトルとドット ------------------------------------------- */
+footer{position:relative;z-index:3;flex:0 0 auto;padding:clamp(8px,1.6vh,22px) 24px clamp(20px,4vh,60px);text-align:center}
+#now{margin-bottom:clamp(14px,2.4vh,32px);transition:opacity .28s ease}
+#now b{display:block;font-size:clamp(17px,3vh,42px);font-weight:800;letter-spacing:.05em}
+#now span{display:block;margin-top:.5em;font-size:clamp(11px,1.6vh,20px);letter-spacing:.14em;color:var(--accent)}
+#dots{display:flex;gap:10px;justify-content:center}
+#dots i{width:8px;height:8px;border-radius:50%;background:rgba(22,25,26,.16);transition:all .35s ease}
+#dots i.on{background:var(--accent);width:26px;border-radius:99px;box-shadow:0 2px 10px var(--a42)}
+
+/* --- 全画面モーダル ----------------------------------------------------- */
+#modal{position:fixed;inset:0;z-index:50;display:none;align-items:center;justify-content:center;padding:clamp(16px,4vh,64px)}
+#modal.open{display:flex}
+#backdrop{position:absolute;inset:0;background:rgba(220,227,228,.985);-webkit-backdrop-filter:blur(26px);backdrop-filter:blur(26px);opacity:0}
+#sheet{position:relative;width:min(100%,1200px);max-height:100%;display:flex;flex-direction:column;gap:clamp(14px,2.6vh,34px)}
+#hero{
+  position:relative;width:100%;aspect-ratio:16/9;border-radius:22px;overflow:hidden;background:var(--surface);
+  box-shadow:0 38px 96px rgba(22,25,26,.3), 0 6px 18px rgba(22,25,26,.12),
+             0 0 0 1px rgba(22,25,26,.07) inset;
+  transform-origin:center center;flex:0 0 auto;
+}
+#hero img,#hero video{width:100%;height:100%;object-fit:contain;display:block}
+#hero video{background:#101314}
+#hero img{object-fit:cover;background:var(--surface)}
+#hero .inner{box-shadow:none;border-radius:0}
+#novideo{
+  position:absolute;inset:0;display:none;flex-direction:column;gap:1em;
+  align-items:center;justify-content:center;text-align:center;padding:8%;
+  font-size:clamp(12px,1.9vh,22px);line-height:1.8;color:var(--ink-2);
+  background:rgba(255,255,255,.94);
+}
+#novideo code{color:var(--accent);font-size:1.05em;word-break:break-all}
+#meta{overflow-y:auto;-webkit-overflow-scrolling:touch}
+#meta .tag{display:inline-block;padding:.4em 1em;border-radius:99px;font-size:clamp(10px,1.4vh,16px);
+  font-weight:700;letter-spacing:.18em;border:1px solid var(--accent);color:var(--accent);margin-bottom:.9em}
+#meta h2{font-size:clamp(21px,3.6vh,50px);font-weight:800;letter-spacing:.03em;line-height:1.25}
+#meta .sub{margin-top:.5em;font-size:clamp(12px,1.7vh,21px);color:var(--accent);letter-spacing:.1em}
+#meta .desc{margin-top:1em;font-size:clamp(13px,1.9vh,24px);line-height:2;color:var(--ink-2);white-space:pre-wrap}
+#close{
+  position:absolute;right:0;top:calc(-1 * clamp(46px,7vh,76px));
+  width:clamp(40px,6vh,64px);aspect-ratio:1;border-radius:50%;border:1px solid var(--line);
+  background:var(--surface);color:var(--ink);font-size:clamp(17px,2.6vh,30px);line-height:1;cursor:pointer;
+  box-shadow:0 4px 14px rgba(22,25,26,.12);
+  display:flex;align-items:center;justify-content:center;
+}
+#close:active{transform:scale(.9)}
+
+/* --- 全画面化ボタン（数秒で薄くなります） ------------------------------ */
+#fs{position:fixed;right:16px;top:16px;z-index:40;width:42px;height:42px;border-radius:12px;cursor:pointer;
+  border:1px solid var(--line);background:var(--surface);color:var(--ink-2);
+  box-shadow:0 3px 10px rgba(22,25,26,.1);
+  font-size:17px;opacity:.85;transition:opacity .6s ease}
+#fs.dim{opacity:.16}
+
+/* --- 非力な端末では自動でここまで落とします（手で触る必要はありません） -- */
+body.lite .inner{box-shadow:0 12px 26px rgba(22,25,26,.22), 0 0 0 1px rgba(22,25,26,.16) inset}
+body.lite #backdrop{-webkit-backdrop-filter:none;backdrop-filter:none;background:rgba(220,227,228,.995)}
+body.lite2 .bob{animation:none}
+body.lite2 #ambient{filter:none;opacity:.55}
+body.lite2 .glow{box-shadow:none}
+
+/* 横長画面のときはモーダルを左右分割に */
+@media (orientation:landscape) and (min-width:900px){
+  #sheet{flex-direction:row;align-items:center}
+  #hero{width:58%}
+  #meta{width:42%}
+}
+@media (prefers-reduced-motion:reduce){
+  .bob{animation:none}
+}
+</style>
+</head>
+<body>
+
+<div id="ambient"></div>
+<div id="vignette"></div>
+
+<div id="stage"><div id="tilt"><div id="ring"></div></div></div>
+
+<footer>
+  <div id="now"><b id="nowTitle"></b><span id="nowSub"></span></div>
+  <div id="dots"></div>
+</footer>
+
+<div id="modal" aria-hidden="true">
+  <div id="backdrop"></div>
+  <div id="sheet">
+    <button id="close" aria-label="閉じる">✕</button>
+    <div id="hero"></div>
+    <div id="meta">
+      <span class="tag" id="mtag"></span>
+      <h2 id="mtitle"></h2>
+      <div class="sub" id="msub"></div>
+      <div class="desc" id="mdesc"></div>
+    </div>
+  </div>
+</div>
+
+<button id="fs" aria-label="全画面">⛶</button>
+
+<script>
+/* ==========================================================================
+   ★★★ ここだけ書き換えれば内容が変わります ★★★
+
+   ・画像は images/ フォルダに「id と同じ名前」で置いてください。
+       例）images/game1.jpg  → 1枚目のサムネになります
+       .jpg .jpeg .png .webp .svg のどれでもOK。この順で探して、
+       最初に見つかったものを使います（.jpg が最優先）。
+   ・動画は videos/ フォルダに「id と同じ名前」で置いてください。
+       例）videos/video1.mp4   （.mp4 .webm .m4v に対応）
+   ・タイトルの下に一言添えたいときは sub: "〜" を1行足します（省略可）。
+   ・6枚目以降を足したいときは、下の { ... } を1つコピーして
+     id を game6 などに変えるだけです。枚数の制限はありません。
+   ========================================================================== */
+// 画面全体で使うアクセントカラー。基調は白黒で、差し色はこの1色だけです。
+// ここを変えると、枠の光・バッジ・ドット・下線・背景のにじみが一括で変わります。
+const ACCENT = "#4FADBB";
+
+const ITEMS = [
+  {
+    id: "game1",                 // ← images/game1.jpg を読みます
+    type: "game",                // "game" か "video"
+    title: "炒飯道",
+    desc:  "炒飯を作ってみよう！"
+  },
+  {
+    id: "game2", type: "game",
+    title: "ポーズスタッキング",
+    desc:  "高く積み上げよう！\n。"
+  },
+  {
+    id: "game3", type: "game",
+    title: "ふいて、みつけて、にっこり",
+    desc:  "窓ガラスをふいてみよう！"
+  },
+  {
+    id: "game4", type: "game",
+    title: "MOTION CLASH",
+    desc:  "タイミングよくパンチ！"
+  },
+  {
+    id: "game5", type: "game",
+    title: "ディフェンド",
+    desc:  "サッカーボールを体でブロック！"
+  },
+  {
+    id: "video1", type: "video",
+    title: "理工カレッジTGSドキュメントムービー",
+    desc:  "インスタ、Youtubeをチェック！"
+  }
+  // 特定のカードだけ色を変えたいときは accent: "#xxxxxx" を1行足してください
+];
+
+/* --- 動きの調整（好みで数値を変えてください） --------------------------- */
+const CONFIG = {
+  autoSpeed:   0.032,  // 放っておくときの回転の速さ（deg/ms）。0 で止まります
+                       // 向きは ITEMS の順（1→2→3…）に固定。数値は正のまま変えてください
+  dragSense:   0.30,   // スワイプの効き。大きいほど指の動きでよく回ります
+  friction:    0.945,  // 勢いの減り方。1に近いほど長く回り続けます
+  maxBlur:     7,      // 奥のカードのぼかし量(px)。0 にすると軽くなります
+  detent:      0.55,   // 回転の緩急。カードが正面に来ると遅くなり、間では速くなります
+                       // 0 にすると一定速度でくるくる回り続けます（0〜0.9）
+  snapToFront: false,  // true にすると、手を離したとき最寄りのカードで止まります
+  idleResume:  2600,   // 操作後、自動回転に戻るまでの時間(ms)
+  autoLite:    true    // 動きが重い端末で、自動的に効果を減らして滑らかさを優先します
+};
+
+/* ========================= ここから下は仕組み ========================== */
+const IMG_EXT = ["jpg","jpeg","png","webp","svg"];
+const VID_EXT = ["mp4","webm","m4v"];
+
+const $ = s => document.querySelector(s);
+const ring = $("#ring"), stage = $("#stage"), dots = $("#dots");
+const step = 360 / ITEMS.length;
+const cards = [];
+
+/* リングの半径を枚数から決めます。カードは正多角形の各辺に置かれるので、
+   半径が「辺の長さの半分 ÷ tan(π/枚数)」を下回ると隣のカードと3Dで交差して
+   互いに切り合って見えます。その最小値に余裕を掛けたものを半径にします。 */
+const RING_MARGIN = 1.15;
+// 枚数が少ないと最小値が小さくなりすぎる（2枚で0）ので下限を設けています
+const ringK = Math.max(0.6, 0.5 / Math.tan(Math.PI / Math.max(2, ITEMS.length))) * RING_MARGIN;
+document.documentElement.style.setProperty("--ring-k", ringK.toFixed(3));
+let effBlur = CONFIG.maxBlur;
+
+/* 色の計算。古いブラウザでも動くよう color-mix は使いません */
+function toRGB(hex){
+  const h = String(hex).replace("#","");
+  const v = h.length === 3 ? h.split("").map(c => c + c).join("") : h;
+  const n = parseInt(v, 16) || 0;
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+const rgba = (hex, a) => { const c = toRGB(hex); return "rgba(" + c[0] + "," + c[1] + "," + c[2] + "," + a + ")"; };
+const accentOf = it => it.accent || ACCENT;
+const lighten = (hex, p) => { const c = toRGB(hex).map(x => Math.round(x + (255 - x) * p));
+  return "rgb(" + c[0] + "," + c[1] + "," + c[2] + ")"; };
+
+function setAccent(col){
+  const s = document.documentElement.style;
+  s.setProperty("--accent", col);
+  s.setProperty("--accent-lt", lighten(col, .42));
+  s.setProperty("--a42", rgba(col, .26));
+  s.setProperty("--a22", rgba(col, .12));
+}
+
+/* 候補の拡張子を順に試して、最初に読めたものを使う */
+function loadImage(el, id, label){
+  let i = 0;
+  const img = el.querySelector("img");
+  const tryNext = () => {
+    if (i >= IMG_EXT.length){ el.classList.add("noimg"); el.dataset.label = label; return; }
+    img.src = "images/" + id + "." + IMG_EXT[i++];
+  };
+  img.onerror = tryNext;
+  img.onload  = () => { el.classList.remove("noimg"); };
+  tryNext();
+}
+
+ITEMS.forEach((it, i) => {
+  const card = document.createElement("div");
+  card.className = "card";
+  card.style.setProperty("--deg", (i * step) + "deg");
+  card.innerHTML =
+    '<div class="bob" style="--dur:' + (5.2 + (i % 3) * 1.1) + 's;--delay:' + (i * 0.47) + 's">' +
+      '<div class="inner" style="--c:' + accentOf(it) +
+        ';--c55:' + rgba(accentOf(it), .72) + ';--c28:' + rgba(accentOf(it), .34) + '">' +
+        '<img alt="">' +
+        '<div class="caption"><b></b></div>' +
+        '<div class="glow"></div>' +
+      '</div>' +
+    '</div>';
+  ring.appendChild(card);
+  card.querySelector(".caption b").textContent = it.title;
+  const inner = card.querySelector(".inner");
+  loadImage(inner, it.id, it.title);
+  cards.push({ el: card, inner, glow: card.querySelector(".glow"),
+               cap: card.querySelector(".caption"), item: it, index: i,
+               sc: -1, op: -1, bl: -1, gl: -1, cp: -1, z: -1, hit: null });
+  dots.appendChild(document.createElement("i"));
+});
+const dotEls = [...dots.children];
+
+/* --- 毎フレーム：奥行きに応じて 大きさ・明るさ・ぼかし を付ける -------- */
+// 自動回転は angle を減らす向きに回します。カードは rotateY(i×step) で
+// 左→右に 1,2,3… と並ぶので、angle が減ると正面が 1→2→3 の順に進みます。
+let angle = 0, vel = -CONFIG.autoSpeed, front = -1, lastT = performance.now();
+let dragging = false, paused = false, idleUntil = 0;
+
+const norm = a => { a = a % 360; if (a > 180) a -= 360; if (a < -180) a += 360; return a; };
+
+// 正面から±FLAT度までは「正面」とみなし、くっきり・不透明で表示します。
+// これがないと、カードが正面をわずかに外れただけでぼけたままになります。
+const FLAT = Math.min(28, step * 0.55);
+// FADE度より奥のカードは完全に消します。白地では奥のカードも見えてしまい、
+// 画面が「カードの壁」のように雑然とするためです。
+const FADE = 112;
+
+function render(){
+  // まず一番正面に近いカードを決めてから、各カードの見え方を決めます
+  let best = 1e9, bestI = 0;
+  for (const c of cards){
+    c.d = Math.abs(norm(angle + c.index * step));
+    if (c.d < best){ best = c.d; bestI = c.index; }
+  }
+  for (const c of cards){
+    const d = c.d;
+    const q = Math.max(0, Math.min(1, (d - FLAT) / (FADE - FLAT)));  // 0=正面域, 1=消える境目
+    // 大きさは正面で原寸(1.0)、離れるほど連続的に小さく。正面より大きくはしません。
+    // 拡大すると隣のカードと3Dで交差し、互いに切り合って見えるためです。
+    // 値を丸めて、変わったときだけ書き込みます（描画負荷を抑えるため）
+    const sc = Math.round((1 - 0.28 * Math.pow(Math.min(1, d / FADE), 1.2)) * 1000) / 1000;
+    // 正面付近は完全に不透明。白地では半透明だと下のカードが透けて濁ります。
+    const op = Math.round(Math.max(0, 1 - Math.pow(q, 1.15)) * 100) / 100;
+    const bl = Math.round(Math.pow(q, 0.9) * effBlur * 2) / 2;
+    // 光るリングは必ず1枚だけ。どれが選択中か迷わせないため。
+    const gl = (c.index === bestI) ? 1 : 0;
+    const z  = Math.round((1 - d / 180) * 100);
+    if (sc !== c.sc){ c.inner.style.transform = "scale(" + sc + ")"; c.sc = sc; }
+    if (op !== c.op){ c.inner.style.opacity = op; c.op = op; }
+    if (bl !== c.bl){ c.inner.style.filter = bl > 0.4 ? "blur(" + bl + "px)" : "none"; c.bl = bl; }
+    if (gl !== c.gl){ c.glow.style.opacity = gl; c.cap.style.opacity = 1 - gl; c.gl = gl; }
+    if (z  !== c.z ){ c.el.style.zIndex = z; c.z = z; }
+    // 消えているカードがタップを横取りしないようにします
+    const hit = op > 0.08;
+    if (hit !== c.hit){ c.el.style.pointerEvents = hit ? "auto" : "none"; c.hit = hit; }
+  }
+  if (bestI !== front){
+    front = bestI;
+    setAccent(accentOf(ITEMS[front]));
+    dotEls.forEach((d, i) => d.classList.toggle("on", i === front));
+    showNow(ITEMS[front]);
+  }
+  ring.style.transform = "rotateY(" + angle + "deg)";
+}
+
+/* 正面に来たカードの名前を、下の大きな文字に反映します */
+const nowBox = $("#now"), nowTitle = $("#nowTitle"), nowSub = $("#nowSub");
+let nowTimer = null;
+function showNow(it){
+  nowBox.style.opacity = 0;
+  clearTimeout(nowTimer);
+  nowTimer = setTimeout(() => {
+    nowTitle.textContent = it.title;
+    nowSub.textContent   = it.sub || "";
+    nowSub.style.display = it.sub ? "" : "none";
+    nowBox.style.opacity = 1;
+  }, 200);
+}
+
+/* 端末が非力なときは、自動で効果を減らして滑らかさを優先します */
+let fpsFrames = 0, fpsT0 = 0, tier = 0;
+function perfGuard(t){
+  if (!CONFIG.autoLite || tier >= 2) return;
+  if (!fpsT0){ fpsT0 = t; return; }
+  fpsFrames++;
+  if (t - fpsT0 < 2500) return;
+  const fps = fpsFrames / ((t - fpsT0) / 1000);
+  fpsFrames = 0; fpsT0 = t;
+  if (tier === 0 && fps < 26){
+    tier = 1; effBlur = 0;
+    cards.forEach(c => { c.bl = -1; });          // 次のフレームで filter:none を書き直させる
+    document.body.classList.add("lite");
+  } else if (tier === 1 && fps < 22){
+    tier = 2; document.body.classList.add("lite2");
+  }
+}
+
+function tick(t){
+  const dt = Math.min(48, t - lastT); lastT = t;
+  if (!dragging && !paused){
+    if (CONFIG.snapToFront && t > idleUntil){
+      const target = -Math.round(angle / step) * step;
+      angle += (target - angle) * 0.14;
+      vel = 0;
+    } else {
+      // カードが正面に来たところで少し「溜める」ので、
+      // 回り続けていても各カードがきちんと中央で見られます
+      const phase = (((angle % step) + step) % step) / step;
+      const cam = 1 - CONFIG.detent * Math.cos(phase * 2 * Math.PI);
+      angle += vel * dt * cam;
+      // 勢いは「止まる」のではなく、ゆっくりした自動回転に戻っていきます
+      const base = (t > idleUntil) ? -CONFIG.autoSpeed : 0;
+      vel = base + (vel - base) * Math.pow(CONFIG.friction, dt / 16.67);
+    }
+  }
+  render();
+  perfGuard(t);
+  requestAnimationFrame(tick);
+}
+
+/* --- スワイプ（慣性つき） ---------------------------------------------- */
+let sx = 0, sy = 0, sAngle = 0, sTime = 0, moved = 0, lastX = 0, lastMoveT = 0, downCard = null;
+
+stage.addEventListener("pointerdown", e => {
+  dragging = true; stage.classList.add("grabbing");
+  try { stage.setPointerCapture(e.pointerId); } catch (_) {}
+  sx = lastX = e.clientX; sy = e.clientY; sAngle = angle;
+  sTime = lastMoveT = performance.now(); moved = 0; vel = 0;
+  downCard = e.target.closest(".card");
+  const inner = e.target.closest(".inner");
+  if (inner) ripple(inner, e);
+});
+
+stage.addEventListener("pointermove", e => {
+  if (!dragging) return;
+  const dx = e.clientX - sx;
+  moved = Math.max(moved, Math.hypot(dx, e.clientY - sy));
+  angle = sAngle + dx * CONFIG.dragSense;
+  const now = performance.now(), dt = now - lastMoveT;
+  if (dt > 4){ vel = ((e.clientX - lastX) * CONFIG.dragSense) / dt; lastX = e.clientX; lastMoveT = now; }
+});
+
+function endDrag(){
+  if (!dragging) return;
+  dragging = false; stage.classList.remove("grabbing");
+  const dur = performance.now() - sTime;
+  idleUntil = performance.now() + CONFIG.idleResume;
+  // ほとんど動いていなければ「タップ」とみなす
+  if (moved < 14 && dur < 700 && downCard){
+    const c = cards.find(c => c.el === downCard);
+    if (c) openModal(c);
+  }
+  vel = Math.max(-2.2, Math.min(2.2, vel));   // 回しすぎ防止
+  downCard = null;
+}
+stage.addEventListener("pointerup", endDrag);
+stage.addEventListener("pointercancel", endDrag);
+stage.addEventListener("contextmenu", e => e.preventDefault());
+
+function ripple(host, e){
+  const r = host.getBoundingClientRect();
+  const s = Math.max(r.width, r.height) * 1.1;
+  const el = document.createElement("span");
+  el.className = "ripple";
+  el.style.cssText = "width:" + s + "px;height:" + s + "px;left:" +
+    (e.clientX - r.left) + "px;top:" + (e.clientY - r.top) + "px";
+  host.appendChild(el);
+  setTimeout(() => el.remove(), 640);
+}
+
+/* --- モーダル：カードがそのまま拡大して全画面になります ---------------- */
+const modal = $("#modal"), backdrop = $("#backdrop"), hero = $("#hero");
+const EASE = "cubic-bezier(.22,1,.36,1)";
+let openCard = null, animating = false, guard = null;
+
+/* アニメーションの完了通知が来なかった場合でも必ず先へ進めるための保険。
+   （画面が裏に回ったときなどに onfinish が発火しないことがあります） */
+function once(fn, ms){
+  let done = false;
+  const run = () => { if (done) return; done = true; fn(); };
+  setTimeout(run, ms);
+  return run;
+}
+
+function openModal(c){
+  if (animating || modal.classList.contains("open")) return;
+  animating = true; openCard = c; paused = true;
+  const it = c.item;
+  setAccent(accentOf(it));
+  $("#mtag").textContent   = it.type === "video" ? "MOVIE" : "GAME";
+  $("#mtitle").textContent = it.title;
+  $("#msub").textContent   = it.sub || "";
+  $("#msub").style.display = it.sub ? "" : "none";
+  $("#mdesc").textContent  = it.desc || "";
+
+  hero.innerHTML = "";
+  if (it.type === "video"){
+    const v = document.createElement("video");
+    v.controls = true; v.autoplay = true; v.playsInline = true; v.setAttribute("playsinline", "");
+    VID_EXT.forEach(ext => {
+      const s = document.createElement("source");
+      s.src = "videos/" + it.id + "." + ext;
+      s.type = ext === "webm" ? "video/webm" : "video/mp4";
+      v.appendChild(s);
+    });
+    const miss = document.createElement("div");
+    miss.id = "novideo";
+    miss.innerHTML = "動画ファイルが見つかりません<br><code>videos/" + it.id +
+      ".mp4</code><br>このファイルを置くと、ここで再生されます。";
+    // 候補の拡張子を順に試すため、途中の失敗は正常です。
+    // 「全部だめだった」ときだけ案内を出します（networkState 3 = NO_SOURCE）。
+    const NO_SOURCE = 3;
+    const check = () => {
+      const dead = v.networkState === NO_SOURCE || (v.error && v.readyState === 0);
+      miss.style.display = dead ? "flex" : "none";
+    };
+    v.addEventListener("error", check, true);
+    v.addEventListener("loadeddata", () => {
+      check();
+      // タップ操作の流れで再生します。音つき再生が拒否された場合は消音で再生します。
+      const pr = v.play();
+      if (pr && pr.catch) pr.catch(() => { v.muted = true; v.play().catch(() => {}); });
+    });
+    setTimeout(check, 1200);
+    hero.append(v, miss);
+  } else {
+    const box = document.createElement("div");
+    box.className = "inner";
+    box.innerHTML = '<img alt="">';
+    loadImage(box, it.id, it.title);
+    hero.appendChild(box);
+  }
+
+  modal.classList.add("open");
+  modal.setAttribute("aria-hidden", "false");
+
+  // FLIP：タップしたカードの位置から、モーダルの定位置へ繋げて動かす
+  const from = c.inner.getBoundingClientRect();
+  const to   = hero.getBoundingClientRect();
+  const k    = to.width ? from.width / to.width : 1;
+  const dx   = (from.left + from.width / 2) - (to.left + to.width / 2);
+  const dy   = (from.top + from.height / 2) - (to.top + to.height / 2);
+
+  backdrop.animate([{opacity:0},{opacity:1}], {duration:380, easing:"ease", fill:"forwards"});
+  const a = hero.animate(
+    [{transform:"translate(" + dx + "px," + dy + "px) scale(" + k + ")", borderRadius:"18px"},
+     {transform:"none", borderRadius:"22px"}],
+    {duration:520, easing:EASE, fill:"both"}
+  );
+  const ready = once(() => { animating = false; }, 1600);
+  a.onfinish = ready;
+  $("#meta").animate([{opacity:0, transform:"translateY(26px)"},{opacity:1, transform:"none"}],
+    {duration:460, delay:150, easing:EASE, fill:"both"});
+  $("#close").animate([{opacity:0},{opacity:1}], {duration:300, delay:300, fill:"both"});
+}
+
+function closeModal(){
+  if (animating || !modal.classList.contains("open")) return;
+  animating = true;
+  const v = hero.querySelector("video"); if (v) { try { v.pause(); } catch (_) {} }
+  const c = openCard;
+  const from = c ? c.inner.getBoundingClientRect() : null;
+  const to   = hero.getBoundingClientRect();
+
+  backdrop.animate([{opacity:1},{opacity:0}], {duration:340, easing:"ease", fill:"forwards"});
+  $("#meta").animate([{opacity:1},{opacity:0, transform:"translateY(20px)"}], {duration:220, fill:"forwards"});
+  $("#close").animate([{opacity:1},{opacity:0}], {duration:180, fill:"forwards"});
+
+  const end = once(() => {
+    modal.classList.remove("open");
+    modal.setAttribute("aria-hidden", "true");
+    hero.getAnimations().forEach(a => a.cancel());
+    hero.innerHTML = "";
+    paused = false; animating = false; openCard = null;
+    idleUntil = performance.now() + CONFIG.idleResume;
+    lastT = performance.now();
+  }, 900);
+
+  if (from && to.width){
+    const k  = from.width / to.width;
+    const dx = (from.left + from.width / 2) - (to.left + to.width / 2);
+    const dy = (from.top + from.height / 2) - (to.top + to.height / 2);
+    hero.animate(
+      [{transform:"none", borderRadius:"22px", opacity:1},
+       {transform:"translate(" + dx + "px," + dy + "px) scale(" + k + ")", borderRadius:"18px", opacity:0}],
+      {duration:430, easing:EASE, fill:"forwards"}
+    ).onfinish = end;
+  }
+}
+
+$("#close").addEventListener("click", closeModal);
+backdrop.addEventListener("click", closeModal);
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape") closeModal();
+  if (e.key === "ArrowLeft")  { angle += step; idleUntil = performance.now() + CONFIG.idleResume; }
+  if (e.key === "ArrowRight") { angle -= step; idleUntil = performance.now() + CONFIG.idleResume; }
+});
+
+/* --- 全画面ボタン ------------------------------------------------------- */
+const fs = $("#fs");
+fs.addEventListener("click", () => {
+  if (document.fullscreenElement) document.exitFullscreen();
+  else if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {});
+});
+let dimTimer;
+const wake = () => { fs.classList.remove("dim"); clearTimeout(dimTimer);
+  dimTimer = setTimeout(() => fs.classList.add("dim"), 4000); };
+["pointerdown","pointermove","keydown"].forEach(ev => document.addEventListener(ev, wake, {passive:true}));
+wake();
+
+setAccent(ACCENT);
+requestAnimationFrame(t => { lastT = t; tick(t); });
+</script>
+</body>
+</html>

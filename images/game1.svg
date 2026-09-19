@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="0.5" y2="1">
+<stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#eef3f3"/>
+</linearGradient>
+<radialGradient id="halo" cx="0.5" cy="0.42" r="0.62">
+<stop offset="0" stop-color="#4FADBB" stop-opacity="0.12"/><stop offset="1" stop-color="#4FADBB" stop-opacity="0"/>
+</radialGradient>
+<pattern id="grid" width="64" height="64" patternUnits="userSpaceOnUse">
+<path d="M64 0 H0 V64" fill="none" stroke="#16191a" stroke-opacity="0.07" stroke-width="1.5"/>
+</pattern>
+</defs>
+<rect width="1280" height="720" fill="url(#bg)"/>
+<rect width="1280" height="720" fill="url(#grid)"/>
+<rect width="1280" height="720" fill="url(#halo)"/>
+<g fill="none" stroke="#16191a" stroke-width="12.42" stroke-linecap="round" opacity="0.26"><rect x="502.0" y="244.1" width="276" height="151.8" rx="69.0"/><path d="M554.44 320.0 h60.72 M584.8 289.64 v60.72"/><circle cx="702.1" cy="303.44" r="13.8"/><circle cx="733.84" cy="339.32" r="13.8"/></g>
+<text x="640.0" y="528.0" text-anchor="middle" font-family="Helvetica,Arial,sans-serif"
+ font-size="104" font-weight="700" letter-spacing="14" fill="#16191a" fill-opacity="0.9">GAME 1</text>
+<text x="640.0" y="586.0" text-anchor="middle" font-family="Helvetica,Arial,sans-serif"
+ font-size="27" letter-spacing="7" fill="#4FADBB">PLACEHOLDER &#183; REPLACE ME</text>
+<rect x="18" y="18" width="1244" height="684" rx="22" fill="none" stroke="#16191a" stroke-opacity="0.14" stroke-width="2"/>
+</svg>

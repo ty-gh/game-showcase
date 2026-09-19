@@ -104,7 +104,8 @@ body{
   transition:opacity .35s ease;
 }
 /* 正面のカードは、下の大きな見出しと重複するのでキャプションを消します */
-.caption b{display:block;font-size:clamp(12px,2.1vh,27px);font-weight:700;letter-spacing:.04em}
+/* タイトルは white-space:pre-line で、ITEMS の title に書いた \n がそのまま改行になります */
+.caption b{display:block;font-size:clamp(12px,2.1vh,27px);font-weight:700;letter-spacing:.04em;white-space:pre-line}
 
 /* タップ波紋 */
 .ripple{position:absolute;border-radius:50%;background:radial-gradient(circle,rgba(22,25,26,.2),transparent 68%);
@@ -114,7 +115,7 @@ body{
 /* --- 下部のタイトルとドット ------------------------------------------- */
 footer{position:relative;z-index:3;flex:0 0 auto;padding:clamp(8px,1.6vh,22px) 24px clamp(20px,4vh,60px);text-align:center}
 #now{margin-bottom:clamp(14px,2.4vh,32px);transition:opacity .28s ease}
-#now b{display:block;font-size:clamp(17px,3vh,42px);font-weight:800;letter-spacing:.05em}
+#now b{display:block;font-size:clamp(17px,3vh,42px);font-weight:800;letter-spacing:.05em;white-space:pre-line}
 #now span{display:block;margin-top:.5em;font-size:clamp(11px,1.6vh,20px);letter-spacing:.14em;color:var(--accent)}
 #dots{display:flex;gap:10px;justify-content:center}
 #dots i{width:8px;height:8px;border-radius:50%;background:rgba(22,25,26,.16);transition:all .35s ease}
@@ -145,7 +146,7 @@ footer{position:relative;z-index:3;flex:0 0 auto;padding:clamp(8px,1.6vh,22px) 2
 #meta{overflow-y:auto;-webkit-overflow-scrolling:touch}
 #meta .tag{display:inline-block;padding:.4em 1em;border-radius:99px;font-size:clamp(10px,1.4vh,16px);
   font-weight:700;letter-spacing:.18em;border:1px solid var(--accent);color:var(--accent);margin-bottom:.9em}
-#meta h2{font-size:clamp(21px,3.6vh,50px);font-weight:800;letter-spacing:.03em;line-height:1.25}
+#meta h2{font-size:clamp(21px,3.6vh,50px);font-weight:800;letter-spacing:.03em;line-height:1.25;white-space:pre-line}
 #meta .sub{margin-top:.5em;font-size:clamp(12px,1.7vh,21px);color:var(--accent);letter-spacing:.1em}
 #meta .desc{margin-top:1em;font-size:clamp(13px,1.9vh,24px);line-height:2;color:var(--ink-2);white-space:pre-wrap}
 #close{
@@ -221,6 +222,10 @@ body.lite2 .glow{box-shadow:none}
    ・動画は videos/ フォルダに「id と同じ名前」で置いてください。
        例）videos/video1.mp4   （.mp4 .webm .m4v に対応）
    ・タイトルの下に一言添えたいときは sub: "〜" を1行足します（省略可）。
+   ・長いタイトルは、折り返したい位置に \n を入れると そこで改行します。
+       例）"理工カレッジ\nTGSドキュメントムービー"
+       入れなければ幅に応じて自動で折り返します（日本語はどの文字の間でも
+       折り返されるので、意味の切れ目で改行したいときに使ってください）。
    ・6枚目以降を足したいときは、下の { ... } を1つコピーして
      id を game6 などに変えるだけです。枚数の制限はありません。
    ========================================================================== */
@@ -257,7 +262,7 @@ const ITEMS = [
   },
   {
     id: "video1", type: "video",
-    title: "理工カレッジTGSドキュメントムービー",
+    title: "理工カレッジ\nTGSドキュメントムービー",
     desc:  "インスタ、Youtubeをチェック！"
   }
   // 特定のカードだけ色を変えたいときは accent: "#xxxxxx" を1行足してください
